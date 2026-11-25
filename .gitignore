@@ -7,3 +7,4 @@ src-tauri/binaries/uv-*
 .env
 .DS_Store
 *.log
+context_ttsforge_studio*.*
