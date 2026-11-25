@@ -1,0 +1,5 @@
+schema = 1
+python = "3.13"
+ttsforge_requirement = "ttsforge[studio]>=0.5.0,<0.6"
+uv_version = "0.13.7"
+api_version = 1
