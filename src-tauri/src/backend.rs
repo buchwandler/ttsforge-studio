@@ -437,7 +437,7 @@ impl BackendState {
         let mut command = Command::new(&python);
         command
             .args(server_args(&state_root, &token, origin.as_deref()))
-            .env("TTSFORGE_STUDIO", "1")
+            .env("TTSFORGE_DESKTOP", "1")
             .env("PATH", runtime::backend_path(&runtime_root)?)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());

@@ -1,5 +1,5 @@
 [codecrate]
-output = "context_ttsforge_studio.md"
+output = "context_ttsforge_desktop.md"
 keep_docstrings = true
 dedupe = true
 respect_gitignore = true
