@@ -13,9 +13,46 @@ export interface RuntimeStatus {
   runtimeDir: string | null;
   pythonVersion: string | null;
   ttsforgeVersion: string | null;
+  readioVersion: string | null;
+  runtimeBytes: number | null;
+  freeBytes: number | null;
   message: string;
 }
 
+export type EnginePackageState =
+  | "not_installed"
+  | "ready"
+  | "incompatible"
+  | "broken"
+  | "unknown";
+
+export type EngineUpdateState = "current" | "update_available" | "unavailable" | "unknown";
+export type EngineAction = "install" | "update" | "repair" | "remove";
+
+export interface EnginePackageStatus {
+  engineId: string;
+  label: string;
+  distribution: string;
+  installed: boolean;
+  installedVersion: string | null;
+  supportedRequirement: string | null;
+  availableVersion: string | null;
+  updateState: EngineUpdateState;
+  packageBytes: number | null;
+  catalogInstalled: boolean | null;
+  catalogRunnable: boolean | null;
+  catalogReason: string | null;
+  state: EnginePackageState;
+  message: string | null;
+}
+
+export interface EngineMutationResult {
+  status: EnginePackageStatus;
+  packageMutationSucceeded: boolean;
+  backendWasRunning: boolean;
+  backendRestarted: boolean;
+  message: string | null;
+}
 export interface BackendInfo {
   baseUrl: string;
   token: string;

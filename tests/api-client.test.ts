@@ -5,13 +5,18 @@ import {
   cancelJob,
   configureBackend,
   createPreview,
+  createResourceOperation,
+  getEngineModelStatus,
   getJobEvents,
+  getResourceOperation,
+  listEngineModels,
   listJobs,
   retryJob,
   getHealth,
   getSystem,
   TtsForgeApiError
 } from "../src/lib/api";
+import type { EngineModelResource, ResourceOperation } from "../src/lib/api";
 
 const contract = JSON.parse(
   readFileSync(new URL("../api/ttsforge-v1.openapi.json", import.meta.url), "utf8")
@@ -176,5 +181,82 @@ describe("TTSForge API client", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(new Headers(init?.headers).get("Accept")).toBe("audio/wav");
     expect(JSON.parse(String(init?.body))).toMatchObject({ project: "/project", text: "sample" });
+  });
+  it("lists provider resources, creates an operation, and polls it through the typed HTTP client", async () => {
+    configureBackend(backend);
+    const model: EngineModelResource = {
+      engine: "kokoro",
+      target: "en-us-medium",
+      quality: "medium",
+      language: "en-US",
+      label: "Kokoro English medium",
+      installed: true,
+      available: true,
+      state: "outdated",
+      local_version: "2024.1",
+      available_version: "2025.1",
+      update_state: "update_available",
+      bytes_installed: 900_000_000,
+      bytes_download: null,
+      storage_id: "kokoro-english-shared",
+      installable: true,
+      updatable: true,
+      removable: true,
+      verifiable: true,
+      reason: null
+    };
+    const operation: ResourceOperation = {
+      id: "operation-1",
+      action: "update",
+      state: "running",
+      engine: "kokoro",
+      target: "en-us-medium",
+      quality: "medium",
+      current: null,
+      total: null,
+      message: null,
+      result: null,
+      error: null
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse([model]))
+      .mockResolvedValueOnce(jsonResponse(model))
+      .mockResolvedValueOnce(jsonResponse(operation, 202))
+      .mockResolvedValueOnce(jsonResponse(operation));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const models = await listEngineModels({ engine: "kokoro", installed: true });
+    const status = await getEngineModelStatus({
+      engine: "kokoro",
+      target: "en-us-medium",
+      quality: "medium"
+    });
+    const created = await createResourceOperation({
+      action: "update",
+      engine: "kokoro",
+      target: "en-us-medium",
+      quality: "medium",
+      force: false
+    });
+    const polled = await getResourceOperation(created.id);
+
+    expect(models).toEqual([model]);
+    expect(status.update_state).toBe("update_available");
+    expect(created.state).toBe("running");
+    expect(polled.current).toBeNull();
+    expect(fetchMock.mock.calls.map(([input]) => new URL(String(input)).pathname)).toEqual([
+      "/api/v1/resources/models",
+      "/api/v1/resources/models/status",
+      "/api/v1/resources/model-operations",
+      "/api/v1/resources/model-operations/operation-1"
+    ]);
+    expect(new URL(String(fetchMock.mock.calls[0][0])).searchParams.get("installed")).toBe("true");
+    expect(new Headers(fetchMock.mock.calls[2][1]?.headers).get("Authorization")).toBe("Bearer test-token");
+    expect(JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toMatchObject({
+      action: "update",
+      engine: "kokoro",
+      target: "en-us-medium",
+      force: false
+    });
   });
 });

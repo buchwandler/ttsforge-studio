@@ -1,8 +1,8 @@
 schema = 2
 python = "3.13"
-ttsforge_version = "0.5.1"
+ttsforge_version = "0.5.2"
 ttsforge_extra = "studio"
 static_ffmpeg_version = "3.0"
 uv_version = "0.13.7"
 api_version = 1
-openapi_sha256 = "94798bd26dd49d2c5efef49de647d335d6b1326e1f27459a4779794a06c4af97"
+openapi_sha256 = "cdddbcd3d062d1d7bfc6e7b7f817087f1f756ba6c7f6cf020d2bd92d933e536d"

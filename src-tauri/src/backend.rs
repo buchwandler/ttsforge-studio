@@ -188,6 +188,26 @@ fn server_args(state_root: &Path, token: &str, origin: Option<&str>) -> Vec<Stri
     args
 }
 
+fn backend_port(info: &BackendInfo) -> Result<u16, String> {
+    info.base_url
+        .strip_prefix("http://127.0.0.1:")
+        .and_then(|port| port.parse().ok())
+        .filter(|port| *port != 0)
+        .ok_or_else(|| "Managed TTSForge backend has an invalid local URL.".into())
+}
+
+fn active_jobs_in_response(value: &Value) -> Result<bool, String> {
+    let jobs = value
+        .get("jobs")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "TTSForge returned an invalid job list.".to_string())?;
+    Ok(jobs.iter().any(|job| {
+        job.get("state")
+            .and_then(Value::as_str)
+            .is_some_and(|state| matches!(state, "queued" | "preparing" | "running"))
+    }))
+}
+
 fn authenticated_get(port: u16, token: &str, path: &str) -> Result<Value, String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let mut stream = TcpStream::connect_timeout(&address, Duration::from_secs(2))
@@ -409,6 +429,31 @@ impl BackendState {
         }
     }
 
+    pub fn engine_catalog(&mut self) -> Result<Option<Value>, String> {
+        let Some(info) = self.info_if_running() else {
+            return Ok(None);
+        };
+        authenticated_get(backend_port(&info)?, &info.token, "/api/v1/catalog/engines").map(Some)
+    }
+
+    pub fn has_active_jobs(&mut self) -> Result<bool, String> {
+        let Some(info) = self.info_if_running() else {
+            return Ok(false);
+        };
+        let port = backend_port(&info)?;
+        for state in ["queued", "preparing", "running"] {
+            let response = authenticated_get(
+                port,
+                &info.token,
+                &format!("/api/v1/jobs?state={state}&limit=100"),
+            )?;
+            if active_jobs_in_response(&response)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+
     pub fn start(&mut self, app: &AppHandle) -> Result<BackendInfo, String> {
         if let Some(info) = self.info_if_running() {
             return Ok(info);
@@ -579,6 +624,21 @@ mod tests {
     }
 
     #[test]
+    fn detects_active_conversion_jobs_from_the_authenticated_job_list_shape() {
+        for state in ["queued", "preparing", "running"] {
+            assert!(super::active_jobs_in_response(&json!({
+                "jobs": [{"state": state}]
+            }))
+            .unwrap());
+        }
+        assert!(!super::active_jobs_in_response(&json!({
+            "jobs": [{"state": "completed"}]
+        }))
+        .unwrap());
+        assert!(super::active_jobs_in_response(&json!({"unexpected": []})).is_err());
+    }
+
+    #[test]
     fn parses_server_readiness_record() {
         let record = parse_ready_record(
             r#"{"type":"server.ready","host":"127.0.0.1","port":54321,"api_version":1}"#,
@@ -611,9 +671,20 @@ mod tests {
         let port = listener.local_addr().unwrap().port();
         let server = thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
-            let mut request = [0; 2048];
-            let length = stream.read(&mut request).unwrap();
-            let request = String::from_utf8_lossy(&request[..length]);
+            let mut request = Vec::new();
+            let mut buffer = [0; 1024];
+            loop {
+                let length = stream.read(&mut buffer).unwrap();
+                assert_ne!(
+                    length, 0,
+                    "connection closed before complete request headers"
+                );
+                request.extend_from_slice(&buffer[..length]);
+                if request.windows(4).any(|window| window == b"\r\n\r\n") {
+                    break;
+                }
+            }
+            let request = String::from_utf8_lossy(&request);
             assert!(request.contains("Authorization: Bearer secret-token"));
             let body = r#"{"api_version":1,"capabilities":{}}"#;
             write!(

@@ -41,9 +41,84 @@ pub struct RuntimeStatus {
     pub runtime_dir: Option<String>,
     pub python_version: Option<String>,
     pub ttsforge_version: Option<String>,
+    pub readio_version: Option<String>,
+    pub runtime_bytes: Option<u64>,
+    pub free_bytes: Option<u64>,
     pub message: String,
 }
 
+fn directory_bytes(path: &Path) -> Option<u64> {
+    let metadata = fs::symlink_metadata(path).ok()?;
+    if metadata.file_type().is_symlink() {
+        return Some(0);
+    }
+    if metadata.is_file() {
+        return Some(metadata.len());
+    }
+    if !metadata.is_dir() {
+        return Some(0);
+    }
+
+    let mut bytes = 0_u64;
+    for entry in fs::read_dir(path).ok()? {
+        let path = entry.ok()?.path();
+        let metadata = fs::symlink_metadata(&path).ok()?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_dir() {
+            bytes = bytes.saturating_add(directory_bytes(&path)?);
+        } else if metadata.is_file() {
+            bytes = bytes.saturating_add(metadata.len());
+        }
+    }
+    Some(bytes)
+}
+
+fn available_bytes(path: &Path) -> Option<u64> {
+    platform_available_bytes(path.ancestors().find(|candidate| candidate.is_dir())?)
+}
+
+#[cfg(unix)]
+fn platform_available_bytes(path: &Path) -> Option<u64> {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let path = CString::new(path.as_os_str().as_bytes()).ok()?;
+    let mut stats = std::mem::MaybeUninit::<libc::statvfs>::uninit();
+    if unsafe { libc::statvfs(path.as_ptr(), stats.as_mut_ptr()) } != 0 {
+        return None;
+    }
+    let stats = unsafe { stats.assume_init() };
+    Some((stats.f_bavail as u64).saturating_mul(stats.f_frsize as u64))
+}
+
+#[cfg(windows)]
+fn platform_available_bytes(path: &Path) -> Option<u64> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
+
+    let path: Vec<_> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    let mut available = 0_u64;
+    let result = unsafe {
+        GetDiskFreeSpaceExW(
+            path.as_ptr(),
+            &mut available,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    (result != 0).then_some(available)
+}
+
+#[cfg(not(any(unix, windows)))]
+fn platform_available_bytes(_path: &Path) -> Option<u64> {
+    None
+}
 pub fn runtime_root(app: &AppHandle) -> Result<PathBuf, String> {
     let root = app
         .path()
@@ -61,15 +136,16 @@ pub fn server_state_root(app: &AppHandle) -> Result<PathBuf, String> {
         .join("server"))
 }
 
-pub fn venv_python(root: &Path) -> PathBuf {
-    #[cfg(target_os = "windows")]
-    {
+fn venv_python_for_platform(root: &Path, windows: bool) -> PathBuf {
+    if windows {
         root.join("venv").join("Scripts").join("python.exe")
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
+    } else {
         root.join("venv").join("bin").join("python")
     }
+}
+
+pub fn venv_python(root: &Path) -> PathBuf {
+    venv_python_for_platform(root, cfg!(target_os = "windows"))
 }
 
 fn capture(program: &Path, args: &[&str]) -> Option<String> {
@@ -90,6 +166,9 @@ pub fn status(app: &AppHandle) -> RuntimeStatus {
                 runtime_dir: None,
                 python_version: None,
                 ttsforge_version: None,
+                readio_version: None,
+                runtime_bytes: None,
+                free_bytes: None,
                 message: error,
             }
         }
@@ -102,6 +181,9 @@ pub fn status(app: &AppHandle) -> RuntimeStatus {
             runtime_dir: Some(root.display().to_string()),
             python_version: None,
             ttsforge_version: None,
+            readio_version: None,
+            runtime_bytes: directory_bytes(&root),
+            free_bytes: available_bytes(&root),
             message: "Managed Python environment has not been installed.".into(),
         };
     }
@@ -118,6 +200,13 @@ pub fn status(app: &AppHandle) -> RuntimeStatus {
         &[
             "-c",
             "import importlib.metadata as m; print(m.version('ttsforge'))",
+        ],
+    );
+    let readio_version = capture(
+        &python,
+        &[
+            "-c",
+            "import importlib.metadata as m; print(m.version('readio'))",
         ],
     );
 
@@ -143,6 +232,9 @@ pub fn status(app: &AppHandle) -> RuntimeStatus {
         runtime_dir: Some(root.display().to_string()),
         python_version,
         ttsforge_version,
+        readio_version,
+        runtime_bytes: directory_bytes(&root),
+        free_bytes: available_bytes(&root),
         message,
     }
 }
@@ -165,7 +257,7 @@ pub fn remove(app: &AppHandle) -> Result<RuntimeStatus, String> {
     Ok(status(app))
 }
 
-async fn run_uv(app: &AppHandle, root: &Path, args: Vec<String>) -> Result<(), String> {
+pub async fn run_uv(app: &AppHandle, root: &Path, args: Vec<String>) -> Result<(), String> {
     let python_dir = root.join("python");
     let cache_dir = root.join("uv-cache");
 
@@ -303,18 +395,51 @@ pub async fn install(app: &AppHandle) -> Result<RuntimeStatus, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{copy_media_tools, runtime_manifest};
+    use super::{
+        available_bytes, copy_media_tools, directory_bytes, runtime_manifest,
+        venv_python_for_platform,
+    };
     use std::fs;
+    use std::path::Path;
+
+    #[test]
+    fn venv_python_paths_cover_windows_and_unix_layouts() {
+        let root = Path::new("managed-runtime");
+        assert_eq!(
+            venv_python_for_platform(root, true),
+            root.join("venv").join("Scripts").join("python.exe")
+        );
+        assert_eq!(
+            venv_python_for_platform(root, false),
+            root.join("venv").join("bin").join("python")
+        );
+    }
 
     #[test]
     fn managed_requirement_comes_from_runtime_manifest() {
         let manifest = runtime_manifest();
         assert_eq!(manifest.python, "3.13");
-        assert_eq!(manifest.ttsforge_requirement(), "ttsforge[studio]==0.5.1");
+        assert_eq!(manifest.ttsforge_requirement(), "ttsforge[studio]==0.5.2");
         assert_eq!(manifest.api_version, 1);
         assert_eq!(manifest.static_ffmpeg_version, "3.0");
     }
 
+    #[test]
+    fn runtime_storage_counts_regular_files_and_reports_free_space() {
+        let base =
+            std::env::temp_dir().join(format!("ttsforge-runtime-size-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let nested = base.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(base.join("one.bin"), b"1234").unwrap();
+        fs::write(nested.join("two.bin"), b"xyz").unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(base.join("one.bin"), nested.join("linked.bin")).unwrap();
+
+        assert_eq!(directory_bytes(&base), Some(7));
+        assert!(available_bytes(&base).is_some());
+        fs::remove_dir_all(base).unwrap();
+    }
     #[test]
     fn copies_media_tools_to_managed_tools_directory() {
         let base = std::env::temp_dir().join(format!("ttsforge-tools-{}", std::process::id()));

@@ -4,6 +4,10 @@ import {
   mockCancelJob,
   mockCreateJob,
   mockEngines,
+  mockEngineModels,
+  mockEngineModelStatus,
+  mockCreateResourceOperation,
+  mockGetResourceOperation,
   mockInspection,
   mockJob,
   mockSpacy,
@@ -97,6 +101,12 @@ export type ProjectInfo = components["schemas"]["ProjectInfoResponseModel"];
 export type ProjectSummary = components["schemas"]["ProjectSummaryResponseModel"];
 export type JobEventsPage = components["schemas"]["JobEventsPageResponseModel"];
 export type ApiErrorModel = components["schemas"]["ApiErrorModel"];
+
+export type EngineModelResource = components["schemas"]["EngineModelResponseModel"];
+export type EngineModelListQuery = QueryParameters<Operation<"/api/v1/resources/models", "get">>;
+export type EngineModelStatusQuery = QueryParameters<Operation<"/api/v1/resources/models/status", "get">>;
+export type ResourceOperationRequest = components["schemas"]["ResourceOperationRequestModel"];
+export type ResourceOperation = components["schemas"]["ResourceOperationResponseModel"];
 
 export class TtsForgeApiError extends Error {
   readonly status: number;
@@ -387,6 +397,41 @@ export async function ensureSpacy(
 ) {
   if (mockMode()) return mockEnsureSpacy(value.language, value.tier);
   return request("/api/v1/resources/spacy/ensure", "post", { body: value, signal });
+}
+
+export async function listEngineModels(
+  query: EngineModelListQuery,
+  signal?: AbortSignal
+): Promise<EngineModelResource[]> {
+  if (mockMode()) return mockEngineModels(query);
+  return request("/api/v1/resources/models", "get", { query, signal });
+}
+
+export async function getEngineModelStatus(
+  query: EngineModelStatusQuery,
+  signal?: AbortSignal
+): Promise<EngineModelResource> {
+  if (mockMode()) return mockEngineModelStatus(query);
+  return request("/api/v1/resources/models/status", "get", { query, signal });
+}
+
+export async function createResourceOperation(
+  value: ResourceOperationRequest,
+  signal?: AbortSignal
+): Promise<ResourceOperation> {
+  if (mockMode()) return mockCreateResourceOperation(value);
+  return request("/api/v1/resources/model-operations", "post", { body: value, signal });
+}
+
+export async function getResourceOperation(
+  operationId: string,
+  signal?: AbortSignal
+): Promise<ResourceOperation> {
+  if (mockMode()) return mockGetResourceOperation(operationId);
+  return request("/api/v1/resources/model-operations/{operation_id}", "get", {
+    path: { operation_id: operationId },
+    signal
+  });
 }
 
 export async function listSpeechProfiles(directory: string, signal?: AbortSignal) {

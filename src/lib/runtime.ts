@@ -1,24 +1,37 @@
 import { invoke } from "@tauri-apps/api/core";
 import { TTSFORGE_API_VERSION } from "./api/contract";
-import type { BackendInfo, RuntimeStatus } from "./types";
+import { mockDesktopRuntimeStatus, mockEngineStatuses } from "./mock";
+import type {
+  BackendInfo,
+  EngineAction,
+  EngineMutationResult,
+  EnginePackageStatus,
+  RuntimeStatus
+} from "./types";
 
 export function inTauri(): boolean {
   return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+}
+
+export function isMockMode(): boolean {
+  return import.meta.env.VITE_TTSFORGE_MOCK === "1";
 }
 
 export async function runtimeStatus(): Promise<RuntimeStatus> {
   if (inTauri()) {
     return invoke<RuntimeStatus>("runtime_status");
   }
+  if (isMockMode()) return mockDesktopRuntimeStatus();
 
   return {
     installed: true,
     runtimeDir: null,
     pythonVersion: null,
     ttsforgeVersion: null,
-    message: import.meta.env.VITE_TTSFORGE_MOCK === "1"
-      ? "Browser mock mode"
-      : "Browser mode uses an externally started TTSForge server."
+    readioVersion: null,
+    runtimeBytes: null,
+    freeBytes: null,
+    message: "Browser mode uses an externally started TTSForge server."
   };
 }
 
@@ -27,6 +40,42 @@ export async function installRuntime(): Promise<RuntimeStatus> {
     throw new Error("Runtime installation is only available in the desktop app.");
   }
   return invoke<RuntimeStatus>("install_runtime");
+}
+
+
+
+export async function removeRuntime(resetEngineChoices = false): Promise<RuntimeStatus> {
+  if (!inTauri()) {
+    throw new Error("Runtime removal is only available in the desktop app.");
+  }
+  return invoke<RuntimeStatus>("remove_runtime", { resetEngineChoices });
+}
+
+
+export async function engineStatus(): Promise<EnginePackageStatus[]> {
+  if (inTauri()) return invoke<EnginePackageStatus[]>("engine_status");
+  return isMockMode() ? mockEngineStatuses() : [];
+}
+
+export async function mutateEngine(
+  engineId: string,
+  action: EngineAction
+): Promise<EngineMutationResult> {
+  if (!inTauri()) {
+    throw new Error("Engine package changes are only available in the desktop app.");
+  }
+  const commands: Record<EngineAction, string> = {
+    install: "install_engine",
+    update: "update_engine",
+    repair: "repair_engine",
+    remove: "remove_engine"
+  };
+  return invoke<EngineMutationResult>(commands[action], { engineId });
+}
+
+export async function backendStatus(): Promise<BackendInfo | null> {
+  if (!inTauri()) return null;
+  return invoke<BackendInfo | null>("backend_status");
 }
 
 export async function startBackend(): Promise<BackendInfo> {

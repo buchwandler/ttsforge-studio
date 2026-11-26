@@ -37,6 +37,7 @@
   export let onSpeechProfile: (value: string) => void;
   export let onEngineOptions: (value: Record<string, JsonValue>) => void;
 
+  export let onManageEngines: () => void = () => {};
   $: selectedModel = spacyModels.find((item) => item.tier === spacy);
 
   function optionValue(option: EngineOption): JsonValue {
@@ -85,6 +86,12 @@
       </select>
     </label>
 
+    {#if engines.some((item) => !item.installed || !item.runnable)}
+      <div class="engine-management">
+        <p class="muted">Some engine integrations are missing or unavailable.</p>
+        <button class="secondary" type="button" onclick={onManageEngines}>Manage engines</button>
+      </div>
+    {/if}
     <label>
       <span>Target</span>
       <select value={target} disabled={!enabled || !engine} onchange={(event) => onTarget(event.currentTarget.value)}>
@@ -199,6 +206,8 @@
 </section>
 
 <style>
+  .engine-management { margin-top: 10px; }
+  .engine-management p { margin: 0 0 6px; }
   .engine-options, .output-settings { margin-top: 1rem; }
   summary { cursor: pointer; font-weight: 650; }
   .preview-player { display: grid; gap: 0.4rem; margin-top: 1rem; }

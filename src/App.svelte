@@ -11,14 +11,17 @@
   createJob,
   createNarration,
   createPreview,
+  createResourceOperation,
   deleteNarration,
   ensureSpacy,
   getSystem,
   getSystemRuntime,
+  getResourceOperation,
   importSource,
   inspectSource,
   listEngineOptions,
   listEngines,
+  listEngineModels,
   listSpacy,
   listSpeechProfiles,
   listTargets,
@@ -27,11 +30,19 @@
   resolveSetup,
   TtsForgeApiError,
   type RuntimeResponse,
+  type EngineModelResource,
+  type ResourceOperation,
+  type ResourceOperationRequest,
   type SystemResponse
 } from "./lib/api";
   import {
+    backendStatus,
+    engineStatus,
     inTauri,
     installRuntime,
+    isMockMode,
+    mutateEngine,
+    removeRuntime,
     runtimeStatus,
     startBackend,
     stopBackend
@@ -39,8 +50,10 @@
   import type {
     BackendInfo,
     BookInspection,
+    EngineAction,
     EngineChoice,
     EngineOption,
+    EnginePackageStatus,
     JobStatus,
     JsonValue,
     RuntimeStatus,
@@ -77,6 +90,7 @@
   import LibraryPage from "./components/LibraryPage.svelte";
   import SettingsPage from "./components/SettingsPage.svelte";
   import DiagnosticsPage from "./components/DiagnosticsPage.svelte";
+  import RuntimeModelsPage from "./components/RuntimeModelsPage.svelte";
   import ActiveJobCloseDialog from "./components/ActiveJobCloseDialog.svelte";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { openPath } from "@tauri-apps/plugin-opener";
@@ -87,6 +101,20 @@
 
   let runtime: RuntimeStatus | null = null;
   let runtimeBusy = false;
+  let runtimePageLoading = false;
+  let engineOperation = "";
+  let engineOperationMessage = "";
+  let engineNotice = "";
+  let resourceLoading = false;
+  let resourceBusyKey = "";
+  let modelResources: EngineModelResource[] = [];
+  let resourceOperations: ResourceOperation[] = [];
+  let resourceInventoryErrors: string[] = [];
+  let resourceOperationErrors: Record<string, string> = {};
+  let resourceNotice = "";
+  const resourcePollTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  const resourcePollControllers = new Map<string, AbortController>();
+  let resourceInventoryGeneration = 0;
   let backendReady = false;
   let backendConnection: BackendInfo | null = null;
   let sourceBusy = false;
@@ -98,6 +126,7 @@
   let conversionReview: ConversionReview | null = null;
   let preflightConflict = false;
   let engines: EngineChoice[] = [];
+  let enginePackageStatuses: EnginePackageStatus[] = [];
   let targets: TargetChoice[] = [];
   let voices: VoiceChoice[] = [];
   let spacyModels: SpacyModel[] = [];
@@ -196,6 +225,8 @@
       speechProfileRequests.cancel();
       libraryStore.clear();
       if (previewUrl) URL.revokeObjectURL(previewUrl);
+      for (const timer of resourcePollTimers.values()) clearTimeout(timer);
+      for (const controller of resourcePollControllers.values()) controller.abort();
       jobTracker.dispose();
       stopBackend().catch(() => undefined);
     };
@@ -220,7 +251,31 @@
       try {
         runtime = await installRuntime();
       } finally {
-        runtimeBusy = false;
+        try {
+          await refreshRuntimeWorkspace();
+        } finally {
+          runtimeBusy = false;
+        }
+      }
+    });
+  }
+
+
+  async function removeManagedRuntime(resetEngineChoices: boolean) {
+    await run(async () => {
+      runtimeBusy = true;
+      backendReady = false;
+      backendConnection = null;
+      systemInfo = null;
+      backendRuntime = null;
+      try {
+        runtime = await removeRuntime(resetEngineChoices);
+      } finally {
+        try {
+          await refreshRuntimeWorkspace();
+        } finally {
+          runtimeBusy = false;
+        }
       }
     });
   }
@@ -229,18 +284,201 @@
     await run(async () => {
       runtimeBusy = true;
       try {
-        const info = await startBackend();
-        configureBackend(info);
-        backendConnection = info;
-        const [system, runtimeDetails] = await Promise.all([getSystem(), getSystemRuntime()]);
-        systemInfo = system;
-        backendRuntime = runtimeDetails;
-        backendReady = true;
-        await jobTracker.refreshHistory();
-        if (settings.libraryRoot) await libraryStore.load(settings.libraryRoot);
-        if (settings.speechProfilesDirectory) await refreshSpeechProfiles();
+        await refreshBackendContext(await startBackend());
       } finally {
         runtimeBusy = false;
+      }
+    });
+  }
+
+  async function refreshBackendContext(info: BackendInfo) {
+    backendReady = false;
+    configureBackend(info);
+    backendConnection = info;
+    const [system, runtimeDetails, availableEngines] = await Promise.all([
+      getSystem(),
+      getSystemRuntime(),
+      listEngines()
+    ]);
+    systemInfo = system;
+    backendRuntime = runtimeDetails;
+    engines = availableEngines;
+    backendReady = true;
+    await refreshResourceInventory();
+    await jobTracker.refreshHistory();
+    if (settings.libraryRoot) await libraryStore.load(settings.libraryRoot);
+    if (settings.speechProfilesDirectory) await refreshSpeechProfiles();
+  }
+
+  function resourceKey(resource: Pick<EngineModelResource, "engine" | "target" | "quality">): string {
+    return `${resource.engine}:${resource.target}:${resource.quality ?? ""}`;
+  }
+
+  function saveResourceOperation(operation: ResourceOperation) {
+    const existing = resourceOperations.findIndex((item) => item.id === operation.id);
+    resourceOperations = existing < 0
+      ? [...resourceOperations, operation]
+      : resourceOperations.map((item) => item.id === operation.id ? operation : item);
+  }
+
+  async function refreshResourceInventory() {
+    const generation = ++resourceInventoryGeneration;
+    resourceNotice = "";
+    if (!backendReady || engines.length === 0) {
+      modelResources = [];
+      resourceInventoryErrors = [];
+      resourceLoading = false;
+      return;
+    }
+
+    resourceLoading = true;
+    const results = await Promise.allSettled(
+      engines.map((engine) => listEngineModels({ engine: engine.id, refresh: true }))
+    );
+    if (generation !== resourceInventoryGeneration) return;
+
+    modelResources = results.flatMap((result) => result.status === "fulfilled" ? result.value : []);
+    resourceInventoryErrors = results.flatMap((result, index) =>
+      result.status === "rejected"
+        ? [`${engines[index].id}: ${result.reason instanceof Error ? result.reason.message : String(result.reason)}`]
+        : []
+    );
+    resourceLoading = false;
+  }
+
+  async function pollResourceOperation(operationId: string) {
+    const timer = resourcePollTimers.get(operationId);
+    if (timer) clearTimeout(timer);
+    resourcePollTimers.delete(operationId);
+    resourcePollControllers.get(operationId)?.abort();
+    const controller = new AbortController();
+    resourcePollControllers.set(operationId, controller);
+    delete resourceOperationErrors[operationId];
+    resourceOperationErrors = { ...resourceOperationErrors };
+
+    try {
+      const operation = await getResourceOperation(operationId, controller.signal);
+      if (controller.signal.aborted) {
+        if (resourcePollControllers.get(operationId) === controller) resourcePollControllers.delete(operationId);
+        return;
+      }
+      if (resourcePollControllers.get(operationId) === controller) resourcePollControllers.delete(operationId);
+      saveResourceOperation(operation);
+      if (operation.state === "queued" || operation.state === "running") {
+        const timer = setTimeout(() => void pollResourceOperation(operationId), 1500);
+        resourcePollTimers.set(operationId, timer);
+      } else {
+        await refreshRuntimeWorkspace();
+      }
+    } catch (e) {
+      if (resourcePollControllers.get(operationId) === controller) resourcePollControllers.delete(operationId);
+      if (!controller.signal.aborted && !isAbortError(e)) {
+        if (e instanceof TtsForgeApiError && e.status === 404) {
+          resourceOperations = resourceOperations.filter((operation) => operation.id !== operationId);
+          delete resourceOperationErrors[operationId];
+          resourceOperationErrors = { ...resourceOperationErrors };
+          await refreshRuntimePage();
+          resourceNotice = "The provider no longer has this operation record. Inventory was refreshed; no completion state was inferred.";
+        } else {
+          resourceOperationErrors = {
+            ...resourceOperationErrors,
+            [operationId]: e instanceof Error ? e.message : String(e)
+          };
+        }
+      }
+    }
+  }
+
+  async function manageModelResource(
+    resource: EngineModelResource,
+    action: ResourceOperationRequest["action"]
+  ) {
+    if (resourceBusyKey) return;
+    const key = resourceKey(resource);
+    await run(async () => {
+      resourceBusyKey = key;
+      resourceNotice = "";
+      try {
+        const operation = await createResourceOperation({
+          action,
+          engine: resource.engine,
+          target: resource.target,
+          quality: resource.quality,
+          force: false
+        });
+        saveResourceOperation(operation);
+        if (operation.state === "queued" || operation.state === "running") {
+          void pollResourceOperation(operation.id);
+        } else {
+          await refreshRuntimeWorkspace();
+        }
+      } finally {
+        resourceBusyKey = "";
+      }
+    });
+  }
+
+  function refreshResourceOperation(operationId: string) {
+    void pollResourceOperation(operationId);
+  }
+
+  async function refreshRuntimeWorkspace() {
+    runtimePageLoading = true;
+    try {
+      const [nextRuntime, packageStatuses] = await Promise.all([
+        runtimeStatus(),
+        engineStatus()
+      ]);
+      runtime = nextRuntime;
+      enginePackageStatuses = packageStatuses;
+
+      if (inTauri()) {
+        const info = await backendStatus();
+        if (info) {
+          await refreshBackendContext(info);
+        } else {
+          backendReady = false;
+          backendConnection = null;
+          systemInfo = null;
+          backendRuntime = null;
+          await refreshResourceInventory();
+        }
+      } else if (backendReady && backendConnection) {
+        await refreshBackendContext(backendConnection);
+      }
+    } finally {
+      runtimePageLoading = false;
+    }
+  }
+
+  async function refreshRuntimePage() {
+    await run(refreshRuntimeWorkspace);
+  }
+
+  async function manageEngine(engineId: string, action: EngineAction) {
+    const engineLabel = enginePackageStatuses.find((item) => item.engineId === engineId)?.label ?? engineId;
+    const actionLabels: Record<EngineAction, string> = {
+      install: "Installing",
+      update: "Updating",
+      repair: "Repairing",
+      remove: "Uninstalling"
+    };
+    await run(async () => {
+      runtimeBusy = true;
+      engineOperation = `${engineId}:${action}`;
+      engineOperationMessage = `${actionLabels[action]} ${engineLabel} and refreshing runtime health.`;
+      engineNotice = "";
+      try {
+        const result = await mutateEngine(engineId, action);
+        enginePackageStatuses = enginePackageStatuses.map((item) =>
+          item.engineId === engineId ? result.status : item
+        );
+        await refreshRuntimeWorkspace();
+        engineNotice = result.message || `${engineLabel} package operation completed. Runtime, backend, and engine status were refreshed.`;
+      } finally {
+        runtimeBusy = false;
+        engineOperation = "";
+        engineOperationMessage = "";
       }
     });
   }
@@ -754,7 +992,11 @@
     currentPage = page;
     if (page === "library") void refreshLibrary();
     if (page === "diagnostics") void refreshDiagnostics();
-    if (page === "new" && settings.speechProfilesDirectory) void run(refreshSpeechProfiles);
+    if (page === "runtime") void refreshRuntimePage();
+    if (page === "new") void run(async () => {
+      if (settings.speechProfilesDirectory) await refreshSpeechProfiles();
+      engines = backendReady ? await listEngines() : [];
+    });
     if (page === "jobs") void run(() => jobTracker.refreshHistory());
   }
 
@@ -799,9 +1041,11 @@
   <main class="dashboard">
     <RuntimeCard
       status={runtime}
+      backendRuntime={backendRuntime}
       busy={runtimeBusy}
       locked={hasActiveJob}
-      canRepair={inTauri()}
+      canRepair={false}
+      canInstall={inTauri()}
       {backendReady}
       onInstall={installManagedRuntime}
       onStart={connectBackend}
@@ -848,6 +1092,7 @@
         onPause={(value) => updateField("pause_timing", value)}
         onSpeechProfile={updateSpeechProfile}
         onEngineOptions={updateEngineOptions}
+        onManageEngines={() => navigate("runtime")}
         onPreviewVoice={previewSelectedVoice}
         onInstallSpacy={installSelectedSpacyModel}
         onPickOutput={pickOutputPath}
@@ -942,9 +1187,34 @@
       onRefresh={refreshDiagnostics}
     />
   {:else if currentPage === "runtime"}
-    <main class="dashboard">
-      <RuntimeCard status={runtime} busy={runtimeBusy} locked={hasActiveJob} canRepair={inTauri()} {backendReady} onInstall={installManagedRuntime} onStart={connectBackend} />
-    </main>
+    <RuntimeModelsPage
+      {runtime}
+      runtimeDetails={backendRuntime}
+      engines={enginePackageStatuses}
+      resources={modelResources}
+      resourceOperations={resourceOperations}
+      resourceInventoryErrors={resourceInventoryErrors}
+      resourceNotice={resourceNotice}
+      resourceOperationErrors={resourceOperationErrors}
+      resourceLoading={resourceLoading}
+      resourceBusyKey={resourceBusyKey}
+      busy={runtimeBusy}
+      refreshing={runtimePageLoading}
+      {backendReady}
+      locked={hasActiveJob}
+      nativeDesktop={inTauri()}
+      mockMode={isMockMode()}
+      operation={engineOperation}
+      operationMessage={engineOperationMessage}
+      notice={engineNotice}
+      onInstallRuntime={installManagedRuntime}
+      onRemoveRuntime={removeManagedRuntime}
+      onStartBackend={connectBackend}
+      onEngineAction={manageEngine}
+      onResourceAction={manageModelResource}
+      onPollResourceOperation={refreshResourceOperation}
+      onRefresh={refreshRuntimePage}
+    />
   {:else if currentPage === "jobs"}
     <main class="dashboard">
       <div class="span-2">

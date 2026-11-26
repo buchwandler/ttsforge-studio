@@ -11,6 +11,7 @@ describe("product surface components", () => {
     expect(body).toContain('<nav aria-label="Main navigation"');
     expect(body).toContain('aria-current="page"');
     expect(body).toContain("New audiobook");
+    expect(body).toContain("Runtime &amp; models");
   });
 
   it("announces library loading and exposes project refresh controls", () => {
@@ -68,6 +69,37 @@ describe("product surface components", () => {
     expect(body).toContain("Engine options (1)");
     expect(body).toContain("Save audiobook as…");
     expect(body).toContain('aria-label="Voice preview audio"');
+  });
+  it("links unavailable engine integrations to Runtime & models", () => {
+    const { body } = render(SetupPanel, {
+      props: {
+        engines: [{
+          id: "kitten",
+          version: null,
+          installed: false,
+          runnable: false,
+          features: ["voices"],
+          reason: "Optional engine component is not installed."
+        }],
+        onManageEngines: vi.fn(),
+        onLanguage: vi.fn(),
+        onChapters: vi.fn(),
+        onOutput: vi.fn(),
+        onPickOutput: vi.fn(),
+        onEngine: vi.fn(),
+        onTarget: vi.fn(),
+        onVoice: vi.fn(),
+        onPreviewVoice: vi.fn(),
+        onSpacy: vi.fn(),
+        onInstallSpacy: vi.fn(),
+        onPause: vi.fn(),
+        onSpeechProfile: vi.fn(),
+        onEngineOptions: vi.fn()
+      }
+    });
+
+    expect(body).toContain("Some engine integrations are missing or unavailable.");
+    expect(body).toContain("Manage engines");
   });
 
   it("explains active-job close behavior and offers tray or cancel choices", () => {

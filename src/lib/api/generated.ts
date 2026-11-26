@@ -1330,6 +1330,415 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/resources/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    engine: string;
+                    language?: string | null;
+                    installed?: boolean | null;
+                    available?: boolean;
+                    offline?: boolean;
+                    refresh?: boolean;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EngineModelResponseModel"][];
+                    };
+                };
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/models/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query: {
+                    engine: string;
+                    target: string;
+                    quality?: string | null;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EngineModelResponseModel"];
+                    };
+                };
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/model-operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ResourceOperationRequestModel"];
+                };
+            };
+            responses: {
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResourceOperationResponseModel"];
+                    };
+                };
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/resources/model-operations/{operation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    operation_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ResourceOperationResponseModel"];
+                    };
+                };
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/resources/spacy": {
         parameters: {
             query?: never;
@@ -3897,6 +4306,106 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    job_id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["JobCreateResponseModel"];
+                    };
+                };
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ApiErrorResponseModel"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{job_id}/events": {
         parameters: {
             query?: never;
@@ -3993,106 +4502,6 @@ export interface paths {
         };
         put?: never;
         post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/jobs/{job_id}/retry": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path: {
-                    job_id: string;
-                };
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                202: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["JobCreateResponseModel"];
-                    };
-                };
-                400: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                413: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ApiErrorResponseModel"];
-                    };
-                };
-            };
-        };
         delete?: never;
         options?: never;
         head?: never;
@@ -4248,6 +4657,25 @@ export interface components {
             available_engines: string[];
             warnings: string[];
         };
+        AudiobookMetadataModel: {
+            title?: string | null;
+            subtitle?: string | null;
+            author?: string | null;
+            narrator?: string | null;
+            series?: string | null;
+            series_number?: string | null;
+            language?: string | null;
+            publisher?: string | null;
+            year?: string | null;
+            cover?: string | null;
+        };
+        AudiobookMetadataViewResponseModel: {
+            project: string;
+            source: string;
+            source_metadata: components["schemas"]["AudiobookMetadataModel"];
+            overrides: components["schemas"]["AudiobookMetadataModel"];
+            effective: components["schemas"]["AudiobookMetadataModel"];
+        };
         AudiobookRequestModel: {
             source: string;
             project?: string | null;
@@ -4301,6 +4729,29 @@ export interface components {
             cover: string | null;
             metadata?: components["schemas"]["AudiobookMetadataModel"];
         };
+        ChapterListResponseModel: {
+            project: string;
+            chapters: components["schemas"]["ChapterStatusResponseModel"][];
+        };
+        ChapterSelectionRequestModel: {
+            project: string;
+            selection: string;
+        };
+        ChapterSelectionResponseModel: {
+            project: string;
+            selection: string;
+            selected_chapters: number[];
+        };
+        ChapterStatusResponseModel: {
+            number: number;
+            title: string;
+            source_id: string | null;
+            char_count: number | null;
+            selected: boolean;
+            workflow_state: string | null;
+            estimated_duration_seconds: number | null;
+            final_duration_seconds: number | null;
+        };
         ConversionResultResponseModel: {
             output: string;
             workspace: string | null;
@@ -4310,22 +4761,6 @@ export interface components {
             warnings: string[];
             variant: string | null;
             execution: components["schemas"]["ExecutionSummaryResponseModel"] | null;
-        };
-        ExecutionSummaryResponseModel: {
-            stages: components["schemas"]["StageExecutionResponseModel"][];
-            specialist_versions: {
-                [key: string]: string | null;
-            };
-            elapsed_seconds: number;
-        };
-        StageExecutionResponseModel: {
-            stage: string;
-            package: string;
-            action: string;
-            state_before: string;
-            state_after: string | null;
-            elapsed_seconds: number;
-            reason_code: string;
         };
         DeleteSourceImportResponseModel: {
             source_id: string;
@@ -4339,6 +4774,29 @@ export interface components {
             features: string[];
             reason: string | null;
         };
+        EngineModelResponseModel: {
+            engine: string;
+            target: string;
+            quality: string | null;
+            language: string | null;
+            label: string | null;
+            installed: boolean;
+            available: boolean;
+            /** @enum {string} */
+            state: "missing" | "ready" | "outdated" | "partial" | "corrupt" | "unavailable" | "unknown";
+            local_version: string | null;
+            available_version: string | null;
+            /** @enum {string} */
+            update_state: "current" | "update_available" | "unavailable" | "unknown";
+            bytes_installed: number | null;
+            bytes_download: number | null;
+            storage_id: string | null;
+            installable: boolean;
+            updatable: boolean;
+            removable: boolean;
+            verifiable: boolean;
+            reason: string | null;
+        };
         EngineOptionResponseModel: {
             name: string;
             value_type: string | null;
@@ -4350,6 +4808,13 @@ export interface components {
             description: string;
             identity_affecting: boolean;
             runtime_only: boolean;
+        };
+        ExecutionSummaryResponseModel: {
+            stages: components["schemas"]["StageExecutionResponseModel"][];
+            specialist_versions: {
+                [key: string]: string | null;
+            };
+            elapsed_seconds: number;
         };
         HealthResponseModel: {
             ok: boolean;
@@ -4433,6 +4898,15 @@ export interface components {
             event: components["schemas"]["ApplicationEventResponseModel"];
         };
         JsonValue: unknown;
+        LibraryProjectsResponseModel: {
+            root: string;
+            projects: components["schemas"]["ProjectSummaryResponseModel"][];
+        };
+        MetadataValidationResponseModel: {
+            project: string;
+            valid: boolean;
+            findings: components["schemas"]["QcFindingResponseModel"][];
+        };
         NarrationCreateRequestModel: {
             project: string;
             display_name: string;
@@ -4488,9 +4962,21 @@ export interface components {
             variants: components["schemas"]["ProjectVariantResponseModel"][];
             narrations: components["schemas"]["NarrationResponseModel"][];
         };
-        LibraryProjectsResponseModel: {
-            root: string;
-            projects: components["schemas"]["ProjectSummaryResponseModel"][];
+        ProjectMetadataSetRequestModel: {
+            project: string;
+            metadata: components["schemas"]["AudiobookMetadataModel"];
+        };
+        ProjectPathRequestModel: {
+            project: string;
+        };
+        ProjectQcRequestModel: {
+            project: string;
+            narration_id?: string | null;
+        };
+        ProjectSetupResponseModel: {
+            project: string;
+            variant: string | null;
+            saved_setup: components["schemas"]["AudiobookRequestModel"] | null;
         };
         ProjectSummaryResponseModel: {
             project_id: string;
@@ -4508,11 +4994,6 @@ export interface components {
             last_activity: string | null;
             error: string | null;
         };
-        ProjectSetupResponseModel: {
-            project: string;
-            variant: string | null;
-            saved_setup: components["schemas"]["AudiobookRequestModel"] | null;
-        };
         ProjectVariantResponseModel: {
             variant_key: string;
             output: string | null;
@@ -4524,6 +5005,54 @@ export interface components {
         PythonRuntimeResponseModel: {
             version: string;
             executable: string;
+        };
+        QcFindingResponseModel: {
+            id: string;
+            /** @enum {string} */
+            severity: "pass" | "warning" | "error" | "unknown";
+            section: string;
+            message: string;
+            details?: {
+                [key: string]: components["schemas"]["JsonValue"];
+            };
+        };
+        QcReportResponseModel: {
+            project: string;
+            narration_id: string | null;
+            passed: boolean;
+            findings: components["schemas"]["QcFindingResponseModel"][];
+        };
+        ResourceOperationErrorModel: {
+            code: string | null;
+            message: string;
+            category: string | null;
+            recoverable: boolean;
+            suggested_action: string | null;
+        };
+        ResourceOperationRequestModel: {
+            /** @enum {string} */
+            action: "install" | "update" | "verify" | "remove";
+            engine: string;
+            target: string;
+            quality?: string | null;
+            source?: string | null;
+            /** @default false */
+            force: boolean;
+        };
+        ResourceOperationResponseModel: {
+            id: string;
+            /** @enum {string} */
+            action: "install" | "update" | "verify" | "remove";
+            /** @enum {string} */
+            state: "queued" | "running" | "completed" | "failed";
+            engine: string;
+            target: string;
+            quality: string | null;
+            current: number | null;
+            total: number | null;
+            message: string | null;
+            result: components["schemas"]["EngineModelResponseModel"] | null;
+            error: components["schemas"]["ResourceOperationErrorModel"] | null;
         };
         RuntimeProblemResponseModel: {
             /** @enum {string} */
@@ -4608,6 +5137,15 @@ export interface components {
             directory: string;
             profiles: components["schemas"]["SpeechProfileChoiceResponseModel"][];
         };
+        StageExecutionResponseModel: {
+            stage: string;
+            package: string;
+            action: string;
+            state_before: string;
+            state_after: string | null;
+            elapsed_seconds: number;
+            reason_code: string;
+        };
         SystemResponseModel: {
             api_version: number;
             ttsforge_version: string | null;
@@ -4654,80 +5192,6 @@ export interface components {
             warnings: string[];
             executable: boolean;
             variant: string | null;
-        };
-        AudiobookMetadataModel: {
-            title?: string | null;
-            subtitle?: string | null;
-            author?: string | null;
-            narrator?: string | null;
-            series?: string | null;
-            series_number?: string | null;
-            language?: string | null;
-            publisher?: string | null;
-            year?: string | null;
-            cover?: string | null;
-        };
-        AudiobookMetadataViewResponseModel: {
-            project: string;
-            source: string;
-            source_metadata: components["schemas"]["AudiobookMetadataModel"];
-            overrides: components["schemas"]["AudiobookMetadataModel"];
-            effective: components["schemas"]["AudiobookMetadataModel"];
-        };
-        ChapterListResponseModel: {
-            project: string;
-            chapters: components["schemas"]["ChapterStatusResponseModel"][];
-        };
-        ChapterSelectionRequestModel: {
-            project: string;
-            selection: string;
-        };
-        ChapterSelectionResponseModel: {
-            project: string;
-            selection: string;
-            selected_chapters: number[];
-        };
-        ChapterStatusResponseModel: {
-            number: number;
-            title: string;
-            source_id: string | null;
-            char_count: number | null;
-            selected: boolean;
-            workflow_state: string | null;
-            estimated_duration_seconds: number | null;
-            final_duration_seconds: number | null;
-        };
-        MetadataValidationResponseModel: {
-            project: string;
-            valid: boolean;
-            findings: components["schemas"]["QcFindingResponseModel"][];
-        };
-        ProjectMetadataSetRequestModel: {
-            project: string;
-            metadata: components["schemas"]["AudiobookMetadataModel"];
-        };
-        ProjectPathRequestModel: {
-            project: string;
-        };
-        ProjectQcRequestModel: {
-            project: string;
-            narration_id?: string | null;
-        };
-        QcFindingResponseModel: {
-            id: string;
-            /** @enum {string} */
-            severity: "pass" | "warning" | "error" | "unknown";
-            section: string;
-            message: string;
-            details?: {
-                [key: string]: components["schemas"]["JsonValue"];
-            };
-        };
-        QcReportResponseModel: {
-            project: string;
-            narration_id: string | null;
-            passed: boolean;
-            findings: components["schemas"]["QcFindingResponseModel"][];
         };
         WorkflowStepResponseModel: {
             stage: string;

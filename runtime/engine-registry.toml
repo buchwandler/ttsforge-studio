@@ -1,0 +1,71 @@
+schema = 1
+
+[[engine]]
+id = "chatterbox"
+label = "Chatterbox"
+distribution = "chatterboxsynth"
+install_spec = "chatterboxsynth[cpu]>=0.1.1,<0.2"
+uninstall_distributions = ["chatterboxsynth"]
+
+[[engine]]
+id = "inflect"
+label = "Inflect"
+distribution = "inflectsynth"
+install_spec = "inflectsynth[cpu]>=0.1.1,<0.2"
+uninstall_distributions = ["inflectsynth"]
+
+[[engine]]
+id = "kitten"
+label = "Kitten"
+distribution = "kittensynth"
+install_spec = "kittensynth[cpu]>=0.1.9,<0.2"
+uninstall_distributions = ["kittensynth"]
+
+[[engine]]
+id = "kokoro"
+label = "Kokoro"
+distribution = "pykokoro"
+install_spec = "pykokoro>=0.10.13,<0.11"
+uninstall_distributions = ["pykokoro"]
+
+[[engine]]
+id = "piper"
+label = "Piper"
+distribution = "pipersynth"
+install_spec = "pipersynth>=0.2.5,<0.3"
+uninstall_distributions = ["pipersynth"]
+
+[[engine]]
+id = "phonon"
+label = "Phonon"
+distribution = "phononsynth"
+install_spec = "phononsynth[cpu]>=0.1.2,<0.2"
+uninstall_distributions = ["phononsynth"]
+
+[[engine]]
+id = "pocket"
+label = "Pocket"
+distribution = "pocketsynth"
+install_spec = "pocketsynth[cpu]>=0.2.5,<0.3"
+uninstall_distributions = ["pocketsynth"]
+
+[[engine]]
+id = "qwen3"
+label = "Qwen3"
+distribution = "qwen3synth"
+install_spec = "qwen3synth[cpu]>=0.1.0,<0.2"
+uninstall_distributions = ["qwen3synth"]
+
+[[engine]]
+id = "sopro"
+label = "Sopro"
+distribution = "soprosynth"
+install_spec = "soprosynth[cpu]>=0.1.0,<0.2"
+uninstall_distributions = ["soprosynth"]
+
+[[engine]]
+id = "supertonic"
+label = "Supertonic"
+distribution = "supertonicsynth"
+install_spec = "supertonicsynth[cpu]>=0.1.2,<0.2"
+uninstall_distributions = ["supertonicsynth"]

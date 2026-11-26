@@ -13,12 +13,12 @@ The user-facing product is TTSForge. The Tauri identifier remains `io.ttsforge.s
 | Component | Version |
 | --- | --- |
 | Python | 3.13 |
-| TTSForge distribution | 0.5.1, `ttsforge[studio]` |
+| TTSForge distribution | 0.5.2, `ttsforge[studio]` |
 | TTSForge API | v1 |
 | `static-ffmpeg` | 3.0 |
 | `uv` | 0.13.7 |
 
-The OpenAPI v1 contract is vendored at `api/ttsforge-v1.openapi.json`. Its SHA-256 is `94798bd26dd49d2c5efef49de647d335d6b1326e1f27459a4779794a06c4af97`. TypeScript wire types and contract constants are generated from that schema. Do not copy backend defaults or conversion rules into the UI.
+The OpenAPI v1 contract is vendored at `api/ttsforge-v1.openapi.json`. Its SHA-256 is `cdddbcd3d062d1d7bfc6e7b7f817087f1f756ba6c7f6cf020d2bd92d933e536d`. TypeScript wire types and contract constants are generated from that schema. Do not copy backend defaults or conversion rules into the UI.
 
 ## Requirements
 
@@ -68,6 +68,12 @@ Tauri development uses Vite at `http://localhost:1420`. The Rust supervisor pass
 The Rust supervisor starts TTSForge on an ephemeral local port, reads the `server.ready` record, verifies API v1 and authenticated system/runtime readiness, and reports failures through diagnostics. The API token is generated for the managed process and is not a public service credential.
 
 The runtime manager provisions FFmpeg and FFprobe using the manifest-pinned `static-ffmpeg` release. TTSForge remains responsible for media processing and for validating runtime capabilities. The GUI does not invoke FFmpeg directly.
+
+## Engine packages and model resources
+
+Tauri owns the managed Python environment and installs only engine distributions from the trusted registry. Desired engine choices are stored outside the runtime and are preserved when the runtime is removed unless the user explicitly chooses to clear them. Repairing or removing the runtime does not remove provider model data, provider caches, or audio outputs.
+
+TTSForge supplies the engine catalog and normalized model-resource API, backed by the public Readio API. Provider state, revisions, sizes, and supported actions remain authoritative. The desktop does not import specialist engine packages or guess provider cache paths. Runtime, engine-package, and provider-reported model storage are reported separately. Browser mode connects to an external server and does not mutate the native runtime.
 
 ## Conversion and jobs
 

@@ -4,7 +4,7 @@ This document describes the client boundary for the TTSForge desktop application
 
 ## Compatibility tuple
 
-`runtime/runtime-manifest.toml` is the consumed source of truth for Python 3.13, TTSForge 0.5.1 with the `studio` extra, API v1, `static-ffmpeg` 3.0, and `uv` 0.13.7. The vendored OpenAPI document has SHA-256 `94798bd26dd49d2c5efef49de647d335d6b1326e1f27459a4779794a06c4af97`.
+`runtime/runtime-manifest.toml` is the consumed source of truth for Python 3.13, TTSForge 0.5.2 with the `studio` extra, API v1, `static-ffmpeg` 3.0, and `uv` 0.13.7. The vendored OpenAPI document has SHA-256 `cdddbcd3d062d1d7bfc6e7b7f817087f1f756ba6c7f6cf020d2bd92d933e536d`.
 
 `src/lib/api/generated.ts` and `src/lib/api/contract.ts` are generated from the OpenAPI document and manifest. Run `npm run contract:check` to verify generated types, API version, schema identity, and runtime pins. Make contract changes in the vendored schema and generator inputs, not in generated files.
 
@@ -16,6 +16,7 @@ The API v1 contract includes these operation groups:
 - Source inspection and import lifecycle: `/api/v1/sources/inspect`, `/api/v1/sources/import`, `/api/v1/sources/imports/{source_id}`
 - Setup resolution and conversion preflight: `/api/v1/setup/resolve`, `/api/v1/conversions/preflight`
 - Engine, target, voice, engine-option, spaCy, and speech-profile catalogs and provisioning
+- Provider model resources: `/api/v1/resources/models`, `/api/v1/resources/models/status`, asynchronous operations at `/api/v1/resources/model-operations`, and operation polling.
 - Project status, setup, narration, previews, variants, library browsing, metadata, chapters, and quality checks
 - Persistent conversion jobs, cursor-based events, retry, and cancellation: `/api/v1/jobs` and `/api/v1/jobs/{job_id}/...`
 
