@@ -1,11 +1,18 @@
 import type {
   BookInspection,
   EngineChoice,
+  EngineOption,
+  JobEvent,
+  JobEventsPage,
   JobStatus,
+  JobSummary,
   SpacyModel,
+  SpeechProfileChoice,
   TargetChoice,
   VoiceChoice
 } from "./types";
+
+import type { RuntimeResponse } from "./api";
 
 const inspection: BookInspection = {
   source: "/demo/Platform Decay - Martha Wells.epub",
@@ -13,6 +20,7 @@ const inspection: BookInspection = {
   title: "Platform Decay",
   author: "Martha Wells",
   language: "en-US",
+  cover: null,
   chapters: Array.from({ length: 17 }, (_, index) => ({
     number: index + 1,
     title: `Chapter ${index + 1}`,
@@ -121,7 +129,30 @@ const spacy: SpacyModel[] = [
   }
 ];
 
-const jobs = new Map<string, { started: number; cancelled: boolean }>();
+const jobs = new Map<string, { started: number; cancelled: boolean; retryOf: string | null }>();
+
+function jobStatus(
+  id: string,
+  state: JobStatus["state"],
+  values: Partial<JobStatus> = {}
+): JobStatus {
+  return {
+    id,
+    state,
+    created_at: new Date().toISOString(),
+    started_at: null,
+    finished_at: null,
+    project: "/demo/Platform Decay - Martha Wells.ttsforge/book.ssmd-bundle",
+    output: null,
+    narration_id: null,
+    retry_of: jobs.get(id)?.retryOf ?? null,
+    event_sequence: 0,
+    progress: null,
+    result: null,
+    error: null,
+    ...values
+  };
+}
 
 export function mockInspection(source?: string): BookInspection {
   return { ...inspection, source: source || inspection.source };
@@ -143,61 +174,47 @@ export function mockSpacy(): SpacyModel[] {
   return spacy;
 }
 
-export function mockCreateJob(): JobStatus {
+export function mockCreateJob(retryOf: string | null = null): JobStatus {
   const id = crypto.randomUUID();
-  jobs.set(id, { started: Date.now(), cancelled: false });
-  return {
-    id,
-    state: "queued",
-    progress: null,
-    result: null,
-    error: null
-  };
+  const started = Date.now();
+  jobs.set(id, { started, cancelled: false, retryOf });
+  return jobStatus(id, "queued", { created_at: new Date(started).toISOString() });
 }
 
 export function mockCancelJob(id: string): JobStatus {
   const job = jobs.get(id);
   if (job) job.cancelled = true;
-  return {
-    id,
-    state: "cancelled",
-    progress: null,
-    result: null,
-    error: null
-  };
+  return jobStatus(id, "cancelled", { finished_at: new Date().toISOString() });
 }
 
 export function mockJob(id: string): JobStatus {
   const job = jobs.get(id);
   if (!job) {
-    return {
-      id,
-      state: "failed",
-      progress: null,
-      result: null,
+    return jobStatus(id, "failed", {
       error: {
         type: "JobNotFound",
-        message: "Unknown demo job."
+        message: "Unknown demo job.",
+        category: "job",
+        code: "job_not_found",
+        stage: null,
+        package: null,
+        selector: null
       }
-    };
-  }
-
-  if (job.cancelled) {
-    return {
-      id,
-      state: "cancelled",
-      progress: null,
-      result: null,
-      error: null
-    };
+    });
   }
 
   const elapsed = (Date.now() - job.started) / 1000;
+  const createdAt = new Date(job.started).toISOString();
+  if (job.cancelled) {
+    return jobStatus(id, "cancelled", {
+      created_at: createdAt,
+      finished_at: new Date().toISOString()
+    });
+  }
 
   if (elapsed < 2) {
-    return {
-      id,
-      state: "preparing",
+    return jobStatus(id, "preparing", {
+      created_at: createdAt,
       progress: {
         stage: "preflight",
         kind: "stage.started",
@@ -208,19 +225,17 @@ export function mockJob(id: string): JobStatus {
         total: null,
         elapsed_seconds: elapsed,
         details: {}
-      },
-      result: null,
-      error: null
-    };
+      }
+    });
   }
 
   if (elapsed < 24) {
     const fraction = Math.min(0.99, (elapsed - 2) / 22);
     const current = Math.max(1, Math.floor(fraction * 91));
     const chapter = 5 + Math.min(12, Math.floor(fraction * 13));
-    return {
-      id,
-      state: "running",
+    return jobStatus(id, "running", {
+      created_at: createdAt,
+      started_at: createdAt,
       progress: {
         stage: "render",
         kind: "stage.progress",
@@ -234,15 +249,15 @@ export function mockJob(id: string): JobStatus {
           chapter_number: chapter,
           chapter_title: `Chapter ${chapter}`
         }
-      },
-      result: null,
-      error: null
-    };
+      }
+    });
   }
 
-  return {
-    id,
-    state: "completed",
+  return jobStatus(id, "completed", {
+    created_at: createdAt,
+    started_at: createdAt,
+    finished_at: new Date().toISOString(),
+    output: "/demo/Platform Decay - Martha Wells.m4b",
     progress: {
       stage: "export",
       kind: "stage.completed",
@@ -261,8 +276,129 @@ export function mockJob(id: string): JobStatus {
       executed_stages: ["render", "compose", "export"],
       reused_stages: ["convert", "compile", "render_plan"],
       warnings: [],
-      variant: "default"
+      variant: "default",
+      execution: null
+    }
+  });
+}
+
+
+function mockSummary(job: JobStatus): JobSummary {
+  return {
+    id: job.id,
+    state: job.state,
+    created_at: job.created_at,
+    started_at: job.started_at,
+    finished_at: job.finished_at,
+    project: job.project,
+    output: job.output,
+    narration_id: job.narration_id,
+    retry_of: job.retry_of,
+    event_sequence: job.event_sequence
+  };
+}
+
+export function mockListJobs(limit = 50): { jobs: JobSummary[] } {
+  const recent = [...jobs.keys()]
+    .map(mockJob)
+    .sort((left, right) => right.created_at.localeCompare(left.created_at))
+    .slice(0, limit)
+    .map(mockSummary);
+  return { jobs: recent };
+}
+
+export function mockJobEvents(id: string, _after = 0): JobEventsPage {
+  const job = mockJob(id);
+  const events: JobEvent[] = [];
+  return { first: 1, next: job.event_sequence, truncated: false, events };
+}
+
+export function mockRetryJob(id: string): JobStatus {
+  return mockCreateJob(id);
+}
+
+
+export function mockRuntime(): RuntimeResponse {
+  return {
+    python: { version: "3.13", executable: "python" },
+    packages: { ttsforge: "0.5.1", readio: "0.5.1" },
+    audio: {
+      audioexport: { available: true, version: "1.0" },
+      ffmpeg: { available: true, path: null },
+      ffprobe: { available: true, path: null }
     },
+    ready: true,
+    problems: []
+  };
+}
+
+export function mockEngineOptions(): EngineOption[] {
+  return [{
+    name: "speed",
+    value_type: "number",
+    required: false,
+    default: 1,
+    choices: [],
+    minimum: 0.5,
+    maximum: 2,
+    description: "Playback speed multiplier.",
+    identity_affecting: false,
+    runtime_only: true
+  }];
+}
+
+export function mockEnsureSpacy(language: string, tier: string): SpacyModel {
+  const model = spacy.find((item) => item.tier === tier) ?? spacy[0];
+  return { ...model, language, installed: true };
+}
+
+export function mockSpeechProfiles(directory: string): { directory: string; profiles: SpeechProfileChoice[] } {
+  return { directory, profiles: [] };
+}
+
+export function mockLibraryProjects(root: string): { root: string; projects: [] } {
+  return { root, projects: [] };
+}
+
+export function mockCreateNarration(value: { display_name: string; engine: string; target: string; voice?: string | null }) {
+  return {
+    id: "mock-preview-narration",
+    display_name: value.display_name,
+    primary: false,
+    output: null,
+    engine: value.engine,
+    target: value.target,
+    voice: value.voice ?? null,
     error: null
   };
+}
+
+export function mockDeleteNarration(): { deleted: boolean } {
+  return { deleted: true };
+}
+
+
+export function mockPreviewAudio(): Blob {
+  const sampleRate = 22_050;
+  const dataLength = sampleRate / 5 * 2;
+  const bytes = new Uint8Array(44 + dataLength);
+  const view = new DataView(bytes.buffer);
+  const writeText = (offset: number, value: string) => {
+    for (let index = 0; index < value.length; index += 1) bytes[offset + index] = value.charCodeAt(index);
+  };
+
+  writeText(0, "RIFF");
+  view.setUint32(4, 36 + dataLength, true);
+  writeText(8, "WAVE");
+  writeText(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeText(36, "data");
+  view.setUint32(40, dataLength, true);
+  return new Blob([bytes], { type: "audio/wav" });
 }

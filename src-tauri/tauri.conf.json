@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "TTSForge Studio",
+  "productName": "TTSForge",
   "version": "0.1.0",
   "identifier": "io.ttsforge.studio",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "TTSForge Studio",
+        "title": "TTSForge | Local Audiobook Builder",
         "width": 1180,
         "height": 860,
         "minWidth": 860,
@@ -28,6 +28,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "icon": ["icons/icon.png"],
     "externalBin": [
       "binaries/uv"
     ]

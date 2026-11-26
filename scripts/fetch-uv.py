@@ -1,34 +1,61 @@
 #!/usr/bin/env python3
-"""Fetch the pinned uv sidecar for the current Tauri/Rust target.
-
-Uses only the Python standard library.
-"""
+"""Fetch the manifest-pinned uv sidecar for the current Tauri/Rust target."""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import os
+import re
 import shutil
+import stat
 import subprocess
-import sys
 import tarfile
 import tempfile
+import tomllib
 import urllib.request
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath, PureWindowsPath
+from typing import BinaryIO
 
-UV_VERSION = "0.13.7"
-BASE = f"https://github.com/astral-sh/uv/releases/download/{UV_VERSION}"
-
-ASSETS = {
-    "x86_64-unknown-linux-gnu": "uv-x86_64-unknown-linux-gnu.tar.gz",
-    "aarch64-unknown-linux-gnu": "uv-aarch64-unknown-linux-gnu.tar.gz",
-    "x86_64-apple-darwin": "uv-x86_64-apple-darwin.tar.gz",
-    "aarch64-apple-darwin": "uv-aarch64-apple-darwin.tar.gz",
-    "x86_64-pc-windows-msvc": "uv-x86_64-pc-windows-msvc.zip",
-    "aarch64-pc-windows-msvc": "uv-aarch64-pc-windows-msvc.zip",
+ROOT = Path(__file__).resolve().parents[1]
+MANIFEST_PATH = ROOT / "runtime" / "runtime-manifest.toml"
+RELEASES = {
+    "0.13.7": {
+        "x86_64-unknown-linux-gnu": (
+            "uv-x86_64-unknown-linux-gnu.tar.gz",
+            "c5221ff41b7892bfc223543883600125f6a47fe845093e0f5bdff4f359196d83",
+        ),
+        "aarch64-unknown-linux-gnu": (
+            "uv-aarch64-unknown-linux-gnu.tar.gz",
+            "71279f8d3c67241e807b9d8db872d1bf541579fb9f08b7d1eb1682196d1e57dc",
+        ),
+        "x86_64-apple-darwin": (
+            "uv-x86_64-apple-darwin.tar.gz",
+            "20c47e4c1f630b8abaff8c291fa9b9aa300fef92c4fbff95adf198b55287cda7",
+        ),
+        "aarch64-apple-darwin": (
+            "uv-aarch64-apple-darwin.tar.gz",
+            "81b811b57e4624df7ed3aac148e0359100d9962f3d9dce00aec533dc2e086731",
+        ),
+        "x86_64-pc-windows-msvc": (
+            "uv-x86_64-pc-windows-msvc.zip",
+            "0cdc5b38fe5a8168ed6a25814f5ba43c21d313dd3187314fccb37b7cec46e021",
+        ),
+        "aarch64-pc-windows-msvc": (
+            "uv-aarch64-pc-windows-msvc.zip",
+            "505d9e65e7692bac3ddf98c66754aa26c5050c409c184af30a881a0a72cc85e3",
+        ),
+    }
 }
+
+
+def load_runtime_manifest(path: Path = MANIFEST_PATH) -> dict[str, object]:
+    with path.open("rb") as stream:
+        manifest = tomllib.load(stream)
+    if not isinstance(manifest.get("uv_version"), str):
+        raise ValueError("runtime manifest must define uv_version as a string")
+    return manifest
 
 
 def host_target() -> str:
@@ -54,15 +81,8 @@ def host_target() -> str:
 
 def download(url: str, destination: Path) -> None:
     print(f"Downloading {url}")
-    with urllib.request.urlopen(url) as source, destination.open("wb") as sink:
+    with urllib.request.urlopen(url, timeout=60) as source, destination.open("wb") as sink:
         shutil.copyfileobj(source, sink)
-
-
-def expected_sha(text: str) -> str:
-    first = text.strip().split()[0]
-    if len(first) != 64:
-        raise SystemExit("Published checksum file did not contain a SHA-256 hash.")
-    return first.lower()
 
 
 def sha256(path: Path) -> str:
@@ -73,65 +93,144 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def extract_uv(archive: Path, out: Path, windows: bool) -> None:
-    wanted = "uv.exe" if windows else "uv"
-    with tempfile.TemporaryDirectory() as temp_name:
-        temp = Path(temp_name)
-        if archive.suffix == ".zip":
-            with zipfile.ZipFile(archive) as zf:
-                zf.extractall(temp)
-        else:
-            with tarfile.open(archive, "r:gz") as tf:
-                tf.extractall(temp)
+def verify_sha256(path: Path, expected: str, filename: str) -> None:
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ValueError(f"Invalid repository-pinned SHA-256 for {filename}.")
+    actual = sha256(path)
+    if actual != expected:
+        raise ValueError(
+            f"SHA-256 mismatch for {filename}: expected {expected}, got {actual}"
+        )
 
-        candidates = [p for p in temp.rglob(wanted) if p.is_file()]
-        if not candidates:
-            raise SystemExit(f"{wanted} was not found in {archive.name}.")
-        out.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(candidates[0], out)
+
+def validate_member_name(name: str) -> None:
+    posix_path = PurePosixPath(name)
+    windows_path = PureWindowsPath(name)
+    if (
+        not name
+        or "\\" in name
+        or posix_path.is_absolute()
+        or windows_path.is_absolute()
+        or windows_path.drive
+        or ".." in posix_path.parts
+        or ".." in windows_path.parts
+    ):
+        raise ValueError(f"Unsafe archive member path: {name!r}")
+
+
+def expected_member(asset: str, windows: bool) -> str:
+    if windows:
+        if not asset.endswith(".zip"):
+            raise ValueError(f"Unsupported Windows uv archive: {asset}")
+        return "uv.exe"
+    if not asset.endswith(".tar.gz"):
+        raise ValueError(f"Unsupported uv archive: {asset}")
+    directory = asset.removesuffix(".tar.gz")
+    return f"{directory}/uv"
+
+
+def copy_zip_member(archive: zipfile.ZipFile, wanted: str, destination: BinaryIO) -> None:
+    matches = []
+    for info in archive.infolist():
+        validate_member_name(info.filename)
+        if info.filename == wanted:
+            matches.append(info)
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one {wanted!r} executable in uv archive.")
+
+    member = matches[0]
+    file_type = stat.S_IFMT(member.external_attr >> 16)
+    if member.is_dir() or file_type not in (0, stat.S_IFREG):
+        raise ValueError(f"Expected {wanted!r} to be a regular executable file.")
+    with archive.open(member) as source:
+        shutil.copyfileobj(source, destination)
+
+
+def copy_tar_member(archive: tarfile.TarFile, wanted: str, destination: BinaryIO) -> None:
+    matches = []
+    for member in archive.getmembers():
+        validate_member_name(member.name)
+        if member.name == wanted:
+            matches.append(member)
+    if len(matches) != 1:
+        raise ValueError(f"Expected exactly one {wanted!r} executable in uv archive.")
+
+    member = matches[0]
+    if not member.isfile():
+        raise ValueError(f"Expected {wanted!r} to be a regular executable file.")
+    source = archive.extractfile(member)
+    if source is None:
+        raise ValueError(f"Could not read {wanted!r} from uv archive.")
+    with source:
+        shutil.copyfileobj(source, destination)
+
+
+def extract_uv(archive_path: Path, out: Path, target: str, asset: str) -> None:
+    windows = target.endswith("windows-msvc")
+    wanted = expected_member(asset, windows)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb", dir=out.parent, prefix=f".{out.name}.", delete=False
+        ) as destination:
+            temporary = Path(destination.name)
+            if asset.endswith(".zip"):
+                with zipfile.ZipFile(archive_path) as archive:
+                    copy_zip_member(archive, wanted, destination)
+            else:
+                with tarfile.open(archive_path, "r:gz") as archive:
+                    copy_tar_member(archive, wanted, destination)
+            destination.flush()
         if not windows:
-            out.chmod(0o755)
+            temporary.chmod(0o755)
+        os.replace(temporary, out)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--target", default=None)
-    parser.add_argument("--version", default=UV_VERSION)
+    parser.add_argument("--version", default=None)
+    parser.add_argument("--manifest", type=Path, default=MANIFEST_PATH)
     args = parser.parse_args()
 
-    if args.version != UV_VERSION:
-        raise SystemExit(
-            f"This MVP is pinned to uv {UV_VERSION}; update the script and runtime manifest together."
-        )
-
-    target = args.target or host_target()
-    asset = ASSETS.get(target)
-    if asset is None:
-        raise SystemExit(
-            f"Unsupported target {target!r}. Supported: {', '.join(sorted(ASSETS))}"
-        )
-
-    root = Path(__file__).resolve().parents[1]
-    extension = ".exe" if "windows" in target else ""
-    destination = root / "src-tauri" / "binaries" / f"uv-{target}{extension}"
-
-    with tempfile.TemporaryDirectory() as temp_name:
-        temp = Path(temp_name)
-        archive = temp / asset
-        checksum = temp / f"{asset}.sha256"
-        download(f"{BASE}/{asset}", archive)
-        download(f"{BASE}/{asset}.sha256", checksum)
-
-        expected = expected_sha(checksum.read_text(encoding="utf-8"))
-        actual = sha256(archive)
-        if actual != expected:
-            raise SystemExit(
-                f"SHA-256 mismatch for {asset}: expected {expected}, got {actual}"
+    try:
+        manifest = load_runtime_manifest(args.manifest)
+        version = str(manifest["uv_version"])
+        if args.version is not None and args.version != version:
+            raise ValueError(
+                f"uv version is governed by the runtime manifest ({version}), not {args.version}."
+            )
+        release = RELEASES.get(version)
+        if release is None:
+            raise ValueError(
+                f"No repository-pinned uv digests are available for version {version}."
             )
 
-        extract_uv(archive, destination, "windows" in target)
+        target = args.target or host_target()
+        platform = release.get(target)
+        if platform is None:
+            raise ValueError(
+                f"Unsupported target {target!r}. Supported: {', '.join(sorted(release))}"
+            )
+        asset, digest = platform
+        destination = ROOT / "src-tauri" / "binaries" / f"uv-{target}"
+        if target.endswith("windows-msvc"):
+            destination = destination.with_suffix(".exe")
 
-    print(f"Staged uv {UV_VERSION}: {destination}")
+        with tempfile.TemporaryDirectory() as temp_name:
+            archive = Path(temp_name) / asset
+            download(f"https://github.com/astral-sh/uv/releases/download/{version}/{asset}", archive)
+            verify_sha256(archive, digest, asset)
+            extract_uv(archive, destination, target, asset)
+    except (KeyError, OSError, tarfile.TarError, ValueError, zipfile.BadZipFile) as exc:
+        raise SystemExit(f"Could not stage uv: {exc}") from exc
+
+    print(f"Staged uv {version}: {destination}")
 
 
 if __name__ == "__main__":

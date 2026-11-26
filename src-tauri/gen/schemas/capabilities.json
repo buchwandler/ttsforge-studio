@@ -1,1 +1,1 @@
-{"main-capability":{"identifier":"main-capability","description":"Minimal permissions for the TTSForge Studio main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:default"]}}
+{"main-capability":{"identifier":"main-capability","description":"Minimal permissions for the TTSForge main window.","local":true,"windows":["main"],"permissions":["core:default","dialog:default","core:window:allow-close","core:window:allow-hide","core:window:allow-set-focus","core:window:allow-show","opener:default"]}}

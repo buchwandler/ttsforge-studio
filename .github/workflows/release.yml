@@ -1,0 +1,173 @@
+name: signed-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      smoke_test_evidence_url:
+        description: HTTPS link documenting successful Linux, macOS, and Windows smoke tests for this version
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+      WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+      SMOKE_TEST_EVIDENCE_URL: ${{ inputs.smoke_test_evidence_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python scripts/check-release-readiness.py
+
+  build:
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-latest
+          - platform: macos-latest
+          - platform: windows-latest
+    runs-on: ${{ matrix.platform }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+      - if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.95.0
+      - run: npm ci
+      - run: python scripts/fetch-uv.py
+      - run: npm run build
+
+      - name: Import Apple signing certificate
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          printf '%s' "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          security find-identity -v -p codesigning build.keychain | grep -F "$APPLE_SIGNING_IDENTITY"
+          rm certificate.p12
+
+      - name: Import Windows signing certificate
+        if: matrix.platform == 'windows-latest'
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $encoded = Join-Path $env:RUNNER_TEMP "ttsforge-certificate.txt"
+          $certificate = Join-Path $env:RUNNER_TEMP "ttsforge-certificate.pfx"
+          [System.IO.File]::WriteAllText($encoded, $env:WINDOWS_CERTIFICATE)
+          certutil -decode $encoded $certificate
+          if ($LASTEXITCODE -ne 0) { throw "Windows certificate decode failed." }
+          Remove-Item $encoded
+          $expectedThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT.ToUpperInvariant()
+          $imported = Import-PfxCertificate -FilePath $certificate -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $env:WINDOWS_CERTIFICATE_PASSWORD -Force -AsPlainText)
+          if ($imported.Thumbprint.ToUpperInvariant() -ne $expectedThumbprint) { throw "Imported Windows certificate does not match the configured signing identity." }
+          Remove-Item $certificate
+
+      - name: Build Linux release bundle
+        if: matrix.platform == 'ubuntu-latest'
+        run: npm run tauri -- build --ci
+
+      - name: Build and notarize macOS release bundle
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: npm run tauri -- build --ci
+
+      - name: Build signed Windows release bundle
+        if: matrix.platform == 'windows-latest'
+        env:
+          WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CERTIFICATE_THUMBPRINT }}
+        shell: pwsh
+        run: |
+          $config = @{ bundle = @{ windows = @{ certificateThumbprint = $env:WINDOWS_CERTIFICATE_THUMBPRINT; digestAlgorithm = "sha256"; timestampUrl = "http://timestamp.digicert.com" } } } | ConvertTo-Json -Compress -Depth 5
+          npm run tauri -- build --ci --config $config
+
+      - uses: actions/attest@v4
+        with:
+          subject-path: src-tauri/target/release/bundle/**/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ttsforge-release-${{ matrix.platform }}
+          path: src-tauri/target/release/bundle/**
+          if-no-files-found: error
+          retention-days: 30
+
+  draft-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ttsforge-release-*
+          path: release-artifacts
+          merge-multiple: true
+      - name: Prepare draft notes
+        env:
+          SMOKE_TEST_EVIDENCE_URL: ${{ inputs.smoke_test_evidence_url }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          SOURCE_COMMIT: ${{ github.sha }}
+        run: |
+          cat > release-notes.md <<EOF
+          # TTSForge Local Audiobook Builder ${RELEASE_TAG}
+
+          Source commit: ${SOURCE_COMMIT}
+
+          Platform smoke-test evidence: ${SMOKE_TEST_EVIDENCE_URL}
+
+          This release was created as a draft. Review signatures, notarization, provenance attestations, and platform smoke evidence before publishing.
+          EOF
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: TTSForge ${{ github.ref_name }}
+          body_path: release-notes.md
+          draft: true
+          files: release-artifacts/**/*

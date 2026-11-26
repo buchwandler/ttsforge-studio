@@ -5,6 +5,8 @@
   export let busy = false;
   export let backendReady = false;
   export let onInstall: () => void;
+  export let locked = false;
+  export let canRepair = true;
   export let onStart: () => void;
 </script>
 
@@ -34,15 +36,22 @@
 
   <div class="actions">
     {#if !status?.installed}
-      <button class="primary" disabled={busy} onclick={onInstall}>
+      <button class="primary" disabled={busy || locked} onclick={onInstall}>
         {busy ? "Installing…" : "Install runtime"}
       </button>
-    {:else if !backendReady}
-      <button class="primary" disabled={busy} onclick={onStart}>
-        {busy ? "Starting…" : "Start backend"}
-      </button>
     {:else}
-      <span class="ready-line">API ready</span>
+      {#if !backendReady}
+        <button class="primary" disabled={busy} onclick={onStart}>
+          {busy ? "Starting…" : "Start backend"}
+        </button>
+      {:else}
+        <span class="ready-line">API ready</span>
+      {/if}
+      {#if canRepair}
+        <button class="secondary" disabled={busy || locked} onclick={onInstall}>
+          {busy ? "Repairing…" : "Repair runtime"}
+        </button>
+      {/if}
     {/if}
   </div>
 </section>

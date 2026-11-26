@@ -1,152 +1,38 @@
-# TTSForge Studio `/api/v1` contract used by this MVP
+# TTSForge API v1 contract
 
-This is the frontend contract expected by the source in this repository.
+This document describes the client boundary for the TTSForge desktop application. The authoritative, machine-readable contract is [`../api/ttsforge-v1.openapi.json`](../api/ttsforge-v1.openapi.json). Do not treat this summary as a second schema.
 
-The authoritative implementation should live in TTSForge.
+## Compatibility tuple
 
-## Authentication
+`runtime/runtime-manifest.toml` is the consumed source of truth for Python 3.13, TTSForge 0.5.1 with the `studio` extra, API v1, `static-ffmpeg` 3.0, and `uv` 0.13.7. The vendored OpenAPI document has SHA-256 `94798bd26dd49d2c5efef49de647d335d6b1326e1f27459a4779794a06c4af97`.
 
-Every endpoint except `/api/v1/health` is expected to accept:
+`src/lib/api/generated.ts` and `src/lib/api/contract.ts` are generated from the OpenAPI document and manifest. Run `npm run contract:check` to verify generated types, API version, schema identity, and runtime pins. Make contract changes in the vendored schema and generator inputs, not in generated files.
 
-```http
-Authorization: Bearer <token>
-```
+## API surface used by the desktop
 
-## Endpoints used now
+The API v1 contract includes these operation groups:
 
-```text
-POST /api/v1/sources/inspect
-POST /api/v1/sources/import
+- Health, system, capabilities, and runtime status: `/api/v1/health`, `/api/v1/system`, `/api/v1/system/capabilities`, `/api/v1/system/runtime`
+- Source inspection and import lifecycle: `/api/v1/sources/inspect`, `/api/v1/sources/import`, `/api/v1/sources/imports/{source_id}`
+- Setup resolution and conversion preflight: `/api/v1/setup/resolve`, `/api/v1/conversions/preflight`
+- Engine, target, voice, engine-option, spaCy, and speech-profile catalogs and provisioning
+- Project status, setup, narration, previews, variants, library browsing, metadata, chapters, and quality checks
+- Persistent conversion jobs, cursor-based events, retry, and cancellation: `/api/v1/jobs` and `/api/v1/jobs/{job_id}/...`
 
-GET  /api/v1/catalog/engines
-GET  /api/v1/catalog/targets
-GET  /api/v1/catalog/voices
-GET  /api/v1/resources/spacy
+Use the OpenAPI file for exact methods, request and response schemas, error models, and endpoint details.
 
-POST /api/v1/jobs
-GET  /api/v1/jobs/{id}
-POST /api/v1/jobs/{id}/cancel
-```
+## Authentication and local origins
 
-### Inspect source
+The managed desktop backend binds to loopback on an ephemeral port and creates a per-process bearer token. The Rust supervisor reads the `server.ready` record, checks the negotiated API major, and verifies authenticated system and runtime endpoints before reporting the backend ready. The token is held in application memory and must not be logged or committed.
 
-```json
-{
-  "path": "/path/book.epub"
-}
-```
+The health endpoint is public. Other API operations use `Authorization: Bearer <token>`. The API client in `src/lib/api.ts` parses structured error responses, verifies API compatibility, and passes `AbortSignal` through cancellable requests.
 
-Response:
+In Tauri development, Vite is served at `http://localhost:1420`. The supervisor explicitly passes that origin to the backend. `TAURI_DEV_HOST` may change the host, but the origin remains restricted to that host and port. Do not use wildcard origins.
 
-```json
-{
-  "source": "/path/book.epub",
-  "kind": "book",
-  "title": "Book title",
-  "author": "Author",
-  "language": "en-US",
-  "chapters": [
-    {
-      "number": 1,
-      "title": "Chapter One",
-      "source_id": "chapter-1",
-      "char_count": 10000
-    }
-  ]
-}
-```
+Browser development uses `VITE_TTSFORGE_API_URL` and `VITE_TTSFORGE_TOKEN` to connect to an already running server. The server must allow the browser page origin. Browser mode does not provide Tauri runtime provisioning or native file operations. Keep local tokens in environment files that are not committed.
 
-### Import source
+## Client behavior and domain ownership
 
-Multipart field:
+The client asks TTSForge to inspect or import sources, resolve setup defaults, and run conversion preflight. It presents the response, blockers, warnings, and output conflicts before a user confirms job creation. Project and output defaults, conversion rules, validation, runtime capability checks, and job state remain backend-owned.
 
-```text
-file
-```
-
-Response:
-
-```json
-{
-  "source_id": "uuid",
-  "path": "/server/state/imports/uuid/book.epub",
-  "inspection": {
-    "...": "same BookInspection shape"
-  }
-}
-```
-
-### Start job
-
-```json
-{
-  "request": {
-    "source": "/path/book.epub",
-    "chapters": "all",
-    "output": "/path/book.m4b",
-    "language": "en-US",
-    "engine": "kokoro",
-    "target": "target-id",
-    "voice": "voice-id",
-    "engine_options": {},
-    "spacy": "lg",
-    "pause_timing": "engaging",
-    "title": "Book title",
-    "author": "Author",
-    "offline": false,
-    "refresh": false,
-    "replace_output": false,
-    "fresh": false,
-    "new_variant": false
-  },
-  "explicit_fields": [
-    "chapters",
-    "output",
-    "language",
-    "engine",
-    "target",
-    "voice",
-    "spacy",
-    "pause_timing",
-    "title",
-    "author"
-  ]
-}
-```
-
-### Job state
-
-```json
-{
-  "id": "uuid",
-  "state": "running",
-  "progress": {
-    "stage": "render",
-    "kind": "stage.progress",
-    "message": "Rendering speech",
-    "package": "voicerender",
-    "selector": "5-17",
-    "current": 27,
-    "total": 91,
-    "elapsed_seconds": 833.2,
-    "details": {
-      "chapter_number": 8,
-      "chapter_title": "Chapter Eight"
-    }
-  },
-  "result": null,
-  "error": null
-}
-```
-
-Terminal states:
-
-```text
-completed
-failed
-cancelled
-```
-
-The frontend currently polls every 750 ms.
-
-A future release can switch to event streaming without changing `ApplicationEvent`.
+Job tracking uses canonical job status plus event cursors. The UI retains history and reconnect state, and exposes retry, cancel, and completed-output actions. Do not replace the API contract with guessed response fields or duplicate TTSForge domain rules in the frontend.

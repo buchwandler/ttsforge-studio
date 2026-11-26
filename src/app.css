@@ -70,6 +70,13 @@ select:disabled {
   letter-spacing: -0.055em;
 }
 
+
+.product-descriptor {
+  margin: 0 0 8px;
+  color: #aeb9d4;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
 .hero-copy {
   max-width: 700px;
   margin: 18px 0 0;
@@ -218,6 +225,7 @@ button.convert {
   border-radius: 14px;
   color: #bac4d8;
   background: #111620;
+  position: relative;
 }
 
 .file-drop.disabled {
@@ -225,7 +233,11 @@ button.convert {
 }
 
 .file-drop input {
-  display: none;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
 }
 
 .manual-path {
@@ -249,6 +261,15 @@ select {
 input:focus,
 select:focus {
   border-color: #7181a5;
+}
+
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.file-drop:focus-within {
+  outline: 2px solid #b8c7ff;
+  outline-offset: 2px;
 }
 
 .book-summary {
@@ -403,5 +424,15 @@ code {
   .convert-row {
     align-items: stretch;
     flex-direction: column;
+  }
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

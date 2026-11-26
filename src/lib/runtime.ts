@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { TTSFORGE_API_VERSION } from "./api/contract";
 import type { BackendInfo, RuntimeStatus } from "./types";
 
 export function inTauri(): boolean {
@@ -35,7 +36,10 @@ export async function startBackend(): Promise<BackendInfo> {
 
   return {
     baseUrl: import.meta.env.VITE_TTSFORGE_API_URL || window.location.origin,
-    token: import.meta.env.VITE_TTSFORGE_TOKEN || ""
+    token: import.meta.env.VITE_TTSFORGE_TOKEN || "",
+    apiVersion: TTSFORGE_API_VERSION,
+    runtimeReady: true,
+    runtimeProblems: []
   };
 }
 
